@@ -5,8 +5,14 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Writer;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.charset.Charset;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -18,6 +24,11 @@ import java.util.regex.Pattern;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
+import javax.script.ScriptException;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
 
 public abstract class AbstractScriptRunner {
 
@@ -31,40 +42,60 @@ public abstract class AbstractScriptRunner {
 
 
 	protected ScriptEngineManager manager = new ScriptEngineManager();
-	protected ScriptEngine engine = manager.getEngineByName("graal.js");
+	protected ScriptEngine engine = manager.getEngineByName("javascript");
+	 // "graal.js" for graalvm.
 	
 	protected Writer commandSenderStream;
 	protected BufferedReader commandOutputScanner;
-
+	protected ObjectMapper mapper = new ObjectMapper();
+	protected ObjectWriter writerJson = mapper.writer();
 	boolean trace = false;
 
 
+	public AbstractScriptRunner() throws Exception {
+		println("default JVM charset is " + Charset.defaultCharset());
+		// for graal.js (no effect on normal jvm)
+		engine.put("polyglot.js.allowAllAccess", true);
+		// shortcut function
+		engine.eval("function exec(command) { return JSON.parse(shell.exec(command)); }");
 
-	protected String loadFile(String[] args) throws IOException {
-		String filePath = (args.length > 0) ? args[0]
-				: "test/testScriptBash.js";
+		
+		engine.put("shell", this);
 
+		runScriptInClassPath("Polyfill.js");
+		runScriptInClassPath("cycle.js");
+		runScriptInClassPath("json2.js");
+	}
+
+	protected String loadFileFromArgs(String[] args) throws IOException {
+		if(args.length==0) {
+			throw new IOException("Please specify a script path in arg[0]");
+		}
+		String filePath = args[0];
 		return String.join("\n", Files.readAllLines(Paths.get(filePath), Charset.forName("UTF-8")));
 	}
 
 
 
 	public void run(String script) throws Exception {
-
-		println("default JVM charset is " + Charset.defaultCharset());
-		engine.put("polyglot.js.allowAllAccess", true);
-		engine.put("shell", this);
-
 		initProcess();
-
 		trace = true;
-		// shortcut function
-		engine.eval("function exec(command) { return shell.exec(command); }");
 		Object v = engine.eval(script);
-		println("Script result " + v);
-		
+		println("Script result "+ mapper.writeValueAsString(v));
 		close();
 	}
+
+
+
+	private void runScriptInClassPath(String file) throws Exception {
+		Path path = ResourceUtil.toPath(file);
+		String script = String.join("\n", 
+				Files.readAllLines(path, 
+						Charset.forName("UTF-8")));
+		engine.eval(script);
+	}
+
+
 
 	protected abstract void close() throws Exception ;
 
@@ -79,11 +110,11 @@ public abstract class AbstractScriptRunner {
 //	    return d;
 //	}
 
-	public CommandResult exec(String pCommand) throws Exception {
-
+	public String exec(String pCommand) throws Exception {
+		CommandResult r = new CommandResult();
 		println("exec " +pCommand);
 		if (pCommand.trim().isEmpty()) {
-			return new CommandResult();
+			return toJson(r);
 		}
 		if (trace) {
 			println("--- command " + pCommand);
@@ -100,13 +131,13 @@ public abstract class AbstractScriptRunner {
 				filterPattern.add(s);
 			}
 		}
-		// filterPattern.remove(0);
-		CommandResult r = new CommandResult();
-
 		Thread t = scanUntil(JSSHELL_END, filterPattern, r);
 		t.join();
+		return toJson(r);
+	}
 
-		return r;
+	private String toJson(CommandResult r) throws JsonProcessingException {
+		return writerJson.writeValueAsString(r);
 	}
 
 	protected String getCommandTemplate() {
@@ -149,7 +180,7 @@ public abstract class AbstractScriptRunner {
 			}
 			if (!filter(trimString, filterPattern, r)) {
 				if (!trimString.isEmpty() && trace) {
-					println(4, "- " + trimString);
+					printlnIndent(4, "- " + trimString);
 				}
 				commandOutput.append(trimString).append("\n");
 			}
@@ -171,7 +202,7 @@ public abstract class AbstractScriptRunner {
 		}
 		if (!isPrompt && s.startsWith(JSSHELL_EXIT_CODE)) {
 			r.returnCode = s.replace(JSSHELL_EXIT_CODE, "").replace("\n", "").replace("\r", "");
-			println(5, "Return code " + r.returnCode);
+			printlnIndent(5, "Return code " + r.returnCode);
 			return true;
 		}
 		return isPrompt;
@@ -182,7 +213,7 @@ public abstract class AbstractScriptRunner {
 		//System.out.println("*** "+s);
 	}
 
-	protected static void println(int indent, String s) {
+	protected static void printlnIndent(int indent, String s) {
 		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < indent; i++) {
 			sb.append(" ");

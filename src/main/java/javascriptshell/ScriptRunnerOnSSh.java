@@ -13,10 +13,15 @@ import java.util.regex.Pattern;
 
 public class ScriptRunnerOnSSh extends AbstractScriptRunner {
 
+	public ScriptRunnerOnSSh() throws Exception {
+		super();
+	}
+
+
 	public static void main(String[] args) throws Exception {
 		try {
 			AbstractScriptRunner r = new ScriptRunnerOnSSh();
-			String script = r.loadFile(args);
+			String script = r.loadFileFromArgs(args);
 			r.run(script);
 		} catch(Exception e) {
 			e.printStackTrace();
@@ -33,9 +38,9 @@ public class ScriptRunnerOnSSh extends AbstractScriptRunner {
         
 		client = new SshClient(
 				getProp("JSSHELL_USER", "root"), 
-				getProp("JSSHELL_PWD", "root"), 
+				getProp("JSSHELL_PWD", "password"), 
 				getProp("JSSHELL_HOST", "localhost"),
-				Integer.parseInt(getProp("JSSHELL_PORT", "2222")));
+				Integer.parseInt(getProp("JSSHELL_PORT", "22")));
 		client.connect();
 	    commandOutputScanner =  new BufferedReader(new InputStreamReader(client.getIn(), shellEncoding));
 	    commandSenderStream = new OutputStreamWriter(client.getOut(), Charset.forName(shellEncoding) );
