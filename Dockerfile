@@ -1,6 +1,7 @@
 # How to run :
 # docker build -t prawinn555/javascriptshell:latest .
-# docker run -ti --name jsshell prawinn555/javascriptshell:latest
+# make sur the directory exist C:/dev/volume/jsshell/workspace
+# docker run -v C:/dev/volume/jsshell/workspace:/home/workspace -ti --rm --name jsshell prawinn555/javascriptshell:latest
 
 FROM maven:3-jdk-11-slim as builder
 
@@ -30,10 +31,7 @@ RUN echo "----- testing application --------"
 RUN java -Da=2 -jar ./javascriptshell-1.0-jar-with-dependencies.jar test/testScriptBash.js
 RUN echo "----- end testing application --------"
 
-RUN mkdir /home/workspace
-RUN echo "You can put your script files here." > /home/workspace/readme.txt
 VOLUME ["/home/workspace"]
-# see C:\Users\Public\Documents\Hyper-V\Virtual hard disks
 
 RUN echo "cat /home/welcomeFile.txt" > ~/.bashrc
 RUN ls -l ~/.bashrc

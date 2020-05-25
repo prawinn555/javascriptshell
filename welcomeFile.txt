@@ -8,4 +8,5 @@ To run locally the script
 To run locally the script on SSH.
   java -DJSSHELL.mode=ssh -DJSSHELL_USER=<> -DJSSHELL_PWD=<> -DJSSHELL_HOST=<> -jar /home/javascriptshell-1.0-jar-with-dependencies.jar <your_script_file>
   
-  
+The volume is mounted /home/workspace 
+You can put your script files in that location.
